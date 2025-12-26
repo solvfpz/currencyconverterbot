@@ -15,8 +15,19 @@ client = discord.Client(intents=intents)
 
 def get_ltc_price():
     url = "https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT"
-    data = requests.get(url).json()
-    return float(data["price"])
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        print("Binance API response:", data)  # <- debug line
+        return float(data["price"])
+    except KeyError:
+        print(f"Error: 'price' not found in API response: {data}")
+        return None
+    except Exception as e:
+        print(f"Error fetching LTC price: {e}")
+        return None
+
 
 @client.event
 async def on_ready():
@@ -46,3 +57,4 @@ async def on_message(message):
             )
 
 client.run(TOKEN)
+
