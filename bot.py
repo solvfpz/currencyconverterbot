@@ -3,9 +3,10 @@ import requests
 import re
 import os
 
-# Discord token from environment variable
+# Discord bot token from environment variable
 TOKEN = os.getenv("DISCORD_TOKEN")
-if TOKEN is None:
+
+if not TOKEN:
     raise ValueError("DISCORD_TOKEN environment variable is not set!")
 
 # Discord intents
@@ -15,21 +16,13 @@ intents.dm_messages = True
 
 client = discord.Client(intents=intents)
 
-# Get real-time LTC price from CoinGecko
+# Get real-time LTC price from Coinbase (PUBLIC API)
 def get_ltc_price():
-    url = "https://api.coingecko.com/api/v3/simple/price"
-    params = {
-        "ids": "litecoin",
-        "vs_currencies": "usd"
-    }
-
-    response = requests.get(url, params=params, timeout=10)
-    response.raise_for_status()
-
+    url = "https://api.coinbase.com/v2/prices/LTC-USD/spot"
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()  # will throw error if API fails
     data = response.json()
-    print("CoinGecko response:", data)
-
-    return float(data["litecoin"]["usd"])
+    return float(data["data"]["amount"])
 
 @client.event
 async def on_ready():
@@ -40,15 +33,16 @@ async def on_message(message):
     if message.author == client.user:
         return
 
+    # Only respond in DMs
     if isinstance(message.channel, discord.DMChannel):
         content = message.content.strip()
 
-        # Accept: 10, 10$, 300, 300$
+        # Accept: 10, 10$, 10.5, 10.5$
         match = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
 
         if not match:
             await message.channel.send(
-                "❌ Send amount like:\n`10` `10$` `300` `300$`"
+                "❌ Send amount like:\n`10`  `10$`  `300`  `300$`"
             )
             return
 
@@ -56,18 +50,19 @@ async def on_message(message):
 
         try:
             ltc_price = get_ltc_price()
-            ltc_amount = usd / ltc_price
+            ltc = usd / ltc_price
 
             await message.channel.send(
-                f"USD Amount: ${usd:.2f}\n"
-                f"LTC Amount: {ltc_amount:.6f} LTC\n"
-                f"Live LTC Price: ${ltc_price:.2f}"
+                f"USD: ${usd:.2f}\n"
+                f"LTC: {ltc:.6f}\n"
+                f"LTC Price:** ${ltc_price:.2f}"
             )
 
         except Exception as e:
-            print("API ERROR:", e)
+            print(f"API ERROR: {e}")
             await message.channel.send(
-                "⚠️ Unable to fetch live LTC price right now."
+                "⚠️ Coinbase API error. Try again in a moment."
             )
 
+# Run the bot
 client.run(TOKEN)
