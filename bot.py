@@ -1,10 +1,11 @@
 import discord
 import requests
 import re
-
 import os
-TOKEN = os.getenv("DISCORD_TOKEN")
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+if TOKEN is None:
+    raise ValueError("DISCORD_TOKEN environment variable is not set!")
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -28,8 +29,6 @@ async def on_message(message):
 
     if isinstance(message.channel, discord.DMChannel):
         content = message.content.strip()
-
-        # extract number (with or without $)
         match = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
 
         if match:
@@ -38,14 +37,12 @@ async def on_message(message):
             ltc = usd / ltc_price
 
             await message.channel.send(
-                f"💵 {usd} USD ≈ **{ltc:.6f} LTC**\n"
-                f"📈 LTC Price: ${ltc_price}"
+                f"💲 {usd} USD ≈ **{ltc:.6f} LTC**\n"
+                f"LTC Price: ${ltc_price}"
             )
         else:
             await message.channel.send(
                 "❌ Send amount like:\n`10`  `10$`  `300`  `300$`"
             )
 
-
 client.run(TOKEN)
-
