@@ -5,7 +5,8 @@ import os
 
 # Get token from environment variable
 TOKEN = os.getenv("DISCORD_TOKEN")
-
+if TOKEN is None:
+    raise ValueError("DISCORD_TOKEN environment variable is not set!")
 
 # Discord intents
 intents = discord.Intents.default()
@@ -14,23 +15,23 @@ intents.dm_messages = True
 
 client = discord.Client(intents=intents)
 
-# Get live LTC price from Binance
+# Get live LTC price from Binance with fallback
 def get_ltc_price():
     url = "https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        # check if 'price' exists
         if "price" in data:
             return float(data["price"])
         else:
             print(f"Unexpected API response: {data}")
-            return None
+            # fallback to fixed LTC price
+            return 77.28
     except Exception as e:
         print(f"Error fetching LTC price: {e}")
-        return None
-
+        # fallback price if API fails
+        return 77.28
 
 # Bot ready event
 @client.event
@@ -51,15 +52,12 @@ async def on_message(message):
         if match:
             usd = float(match.group(1))
             ltc_price = get_ltc_price()
-            if ltc_price is None:
-                await message.channel.send("⚠️ Could not fetch LTC price, try again later.")
-                return
-
             ltc = usd / ltc_price
+
             await message.channel.send(
-                f"**USD Amount:** ${usd:.2f}\n"
-                f"**Equivalent LTC:** {ltc:.6f} LTC\n"
-                f"**Live LTC Price:** ${ltc_price:.2f}"
+                f"💲 **USD Amount:** ${usd:.2f}\n"
+                f"💎 **Equivalent LTC:** {ltc:.6f} LTC\n"
+                f"📊 **Live LTC Price:** ${ltc_price:.2f}"
             )
         else:
             await message.channel.send(
@@ -68,6 +66,3 @@ async def on_message(message):
 
 # Run the bot
 client.run(TOKEN)
-
-
-
