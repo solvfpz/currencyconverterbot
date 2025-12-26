@@ -5,8 +5,7 @@ import os
 
 # Get token from environment variable
 TOKEN = os.getenv("DISCORD_TOKEN")
-if TOKEN is None:
-    raise ValueError("DISCORD_TOKEN environment variable is not set!")
+
 
 # Discord intents
 intents = discord.Intents.default()
@@ -61,3 +60,4 @@ async def on_message(message):
 
 # Run the bot
 client.run(TOKEN)
+
