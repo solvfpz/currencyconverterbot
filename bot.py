@@ -3,7 +3,7 @@ import requests
 import re
 
 import os
-TOKEN = os.getenv("MTQwODM4MTM4MDA3MjcwMjA5Ng.Gs2Xzn.m3lVOA9v-3_qfhLLKF33C1EvCCeTqya3O5vX5E")
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 
 intents = discord.Intents.default()
@@ -48,3 +48,4 @@ async def on_message(message):
 
 
 client.run(TOKEN)
+
