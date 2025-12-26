@@ -18,7 +18,9 @@ client = discord.Client(intents=intents)
 def get_ltc_price():
     url = "https://api.binance.com/api/v3/ticker/price?symbol=LTCUSDT"
     try:
-        data = requests.get(url, timeout=5).json()
+        response = requests.get(url, timeout=10)  # increase timeout
+        response.raise_for_status()  # raise exception if status != 200
+        data = response.json()
         return float(data["price"])
     except Exception as e:
         print(f"Error fetching LTC price: {e}")
@@ -60,4 +62,5 @@ async def on_message(message):
 
 # Run the bot
 client.run(TOKEN)
+
 
