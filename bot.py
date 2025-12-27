@@ -91,7 +91,7 @@ async def on_message(message):
         if not match:
             await message.channel.send(
                 "❌ Send amount like:\n`10`  `10$`  `300`  `300$`\n"
-                "Or generate UPI QR:\n`upi blaze@upi 500 Payment`"
+                "Or generate UPI QR:\n`upi blaze@upi amount note`"
             )
             return
 
@@ -116,3 +116,4 @@ async def on_message(message):
 
 # Run the bot
 client.run(TOKEN)
+
