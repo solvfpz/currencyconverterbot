@@ -49,42 +49,54 @@ async def on_message(message):
     if message.author == client.user:
         return
 
+    # Only respond in DMs
     if isinstance(message.channel, discord.DMChannel):
         content = message.content.strip()
 
-        parts = content.split()
+        # ---------- STEP 5: UPI → QR COMMAND ----------
+# Usage:
+# upi blaze@upi
+# upi blaze@upi 500
+# upi blaze@upi 500 Payment
 
-        # ---------- SIMPLE UPI QR ----------
-        # blaze@upi
-        # blaze@upi 500
-        if "@" in parts[0]:
-            upi_id = parts[0]
-            amount = None
+if content.lower().startswith("upi "):
+    parts = content.split(maxsplit=3)
 
-            if len(parts) == 2:
-                try:
-                    amount = float(parts[1])
-                except ValueError:
-                    pass
+    if len(parts) < 2:
+        await message.channel.send(
+            "❌ Usage:\n`upi_id amount(optional) note(optional)`"
+        )
+        return
 
-            generate_upi_qr(upi_id, amount)
+    upi_id = parts[1]
+    amount = None
+    note = None
 
-            await message.channel.send(
-                content="Here is your UPI QR code:",
-                file=discord.File("upi_qr.png")
-            )
-            return
+    if len(parts) >= 3:
+        try:
+            amount = float(parts[2])
+        except ValueError:
+            note = parts[2]
 
-        # ---------- USD → LTC ----------
+    if len(parts) == 4:
+        note = parts[3]
+
+    generate_upi_qr(upi_id, amount, note)
+
+    await message.channel.send(
+        content="Here is your UPI QR code:",
+        file=discord.File("upi_qr.png")
+    )
+    return
+
+
+        # ---------- USD → LTC CONVERTER ----------
         match = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
 
         if not match:
             await message.channel.send(
-                "❌ Invalid input\n\n"
-                "Examples:\n"
-                "`10$` → USD to LTC\n"
-                "`blaze@upi` → UPI QR\n"
-                "`blaze@upi 500` → UPI QR with amount"
+                "❌ Send amount like:\n`10`  `10$`  `300`  `300$`\n"
+                "Or generate UPI QR:\n`upi blaze@upi 500 Payment`"
             )
             return
 
@@ -103,10 +115,9 @@ async def on_message(message):
         except Exception as e:
             print(f"API ERROR: {e}")
             await message.channel.send(
-                "⚠️ Coinbase API error. Try again later."
+                "⚠️ Coinbase API error. Try again in a moment."
             )
 
 
 # Run the bot
 client.run(TOKEN)
-
