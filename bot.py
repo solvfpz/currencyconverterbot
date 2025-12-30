@@ -3,9 +3,8 @@ import requests
 import re
 import os
 import qrcode
+import cv2
 
-from PIL import Image
-from pyzbar.pyzbar import decode
 from urllib.parse import urlparse, parse_qs
 
 # ------------------- CONFIG -------------------
@@ -41,19 +40,16 @@ def generate_upi_qr(upi_id, amount=None, note=None):
     img = qrcode.make(upi_url)
     img.save("upi_qr.png")
 
-# ------------------- STEP 3: QR → UPI EXTRACTION -------------------
+# ------------------- STEP 3: QR → UPI (OpenCV) -------------------
 def extract_upi_from_qr(image_path):
-    img = Image.open(image_path)
-    decoded = decode(img)
+    img = cv2.imread(image_path)
+    detector = cv2.QRCodeDetector()
+    data, _, _ = detector.detectAndDecode(img)
 
-    if not decoded:
+    if not data or not data.startswith("upi://"):
         return None
 
-    qr_data = decoded[0].data.decode("utf-8")
-    if not qr_data.startswith("upi://"):
-        return None
-
-    parsed = urlparse(qr_data)
+    parsed = urlparse(data)
     params = parse_qs(parsed.query)
 
     return {
@@ -77,6 +73,7 @@ token_contracts = {
 
 def get_usdt_balances(address):
     balances = {}
+
     for chain in chain_urls:
         url = (
             f"{chain_urls[chain]}"
@@ -125,21 +122,30 @@ async def on_message(message):
                 await message.channel.send("❌ No valid UPI QR detected.")
                 return
 
-            msg = (
+            await message.channel.send(
                 "📌 **UPI QR Details**\n"
                 f"UPI ID: `{data['upi_id']}`\n"
                 f"Name: {data['name'] or 'N/A'}\n"
                 f"Amount: ₹{data['amount'] or 'Not specified'}"
             )
-            await message.channel.send(msg)
             return
 
     # ---------- UPI → QR ----------
     if content.lower().startswith("upi "):
         parts = content.split(maxsplit=3)
+
         upi_id = parts[1]
-        amount = float(parts[2]) if len(parts) >= 3 and parts[2].replace('.', '', 1).isdigit() else None
-        note = parts[3] if len(parts) == 4 else None
+        amount = None
+        note = None
+
+        if len(parts) >= 3:
+            try:
+                amount = float(parts[2])
+            except ValueError:
+                note = parts[2]
+
+        if len(parts) == 4:
+            note = parts[3]
 
         generate_upi_qr(upi_id, amount, note)
         await message.channel.send(
@@ -156,7 +162,7 @@ async def on_message(message):
             price = get_ltc_price()
             await message.channel.send(
                 f"USD: ${usd:.2f}\n"
-                f"LTC: {usd/price:.6f}\n"
+                f"LTC: {usd / price:.6f}\n"
                 f"LTC Price: ${price:.2f}"
             )
         except Exception:
@@ -170,18 +176,19 @@ async def on_message(message):
 
         await message.channel.send(
             f"USDT Address: {address}\n"
-            f"ERC20: {balances['ERC20']:.2f} USD\n"
-            f"BEP20: {balances['BEP20']:.2f} USD\n"
-            f"POLY: {balances['POLY']:.2f} USD"
+            f"USDT ERC20 : {balances['ERC20']:.2f} USD\n"
+            f"USDT BEP20 : {balances['BEP20']:.2f} USD\n"
+            f"USDT POLY  : {balances['POLY']:.2f} USD"
         )
         return
 
+    # ---------- HELP ----------
     await message.channel.send(
-        "❌ Invalid command\n"
+        "❌ Invalid command\n\n"
         "`10$` → USD to LTC\n"
         "`upi upi@id 500 note`\n"
         "`bal wallet_address`\n"
-        "Or send a UPI QR image"
+        "Or send a **UPI QR image**"
     )
 
 # ------------------- RUN -------------------
