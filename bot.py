@@ -54,8 +54,6 @@ def extract_upi_from_qr(image_path):
 
     return {
         "upi_id": params.get("pa", [None])[0],
-        "name": params.get("pn", [None])[0],
-        "amount": params.get("am", [None])[0]
     }
 
 # ------------------- STEP 4: USDT BALANCES -------------------
@@ -124,9 +122,7 @@ async def on_message(message):
 
             await message.channel.send(
                 "📌 **UPI QR Details**\n"
-                f"UPI ID: `{data['upi_id']}`\n"
-                f"Name: {data['name'] or 'N/A'}\n"
-                f"Amount: ₹{data['amount'] or 'Not specified'}"
+                f": `{data['upi_id']}`\n"
             )
             return
 
@@ -193,3 +189,4 @@ async def on_message(message):
 
 # ------------------- RUN -------------------
 client.run(TOKEN)
+
