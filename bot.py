@@ -2,50 +2,47 @@ import discord
 import requests
 import re
 import os
-import qrcode
 import cv2
 
 from urllib.parse import urlparse, parse_qs
 
-# ------------------- CONFIG -------------------
+# ---------------- CONFIG ----------------
 TOKEN = os.getenv("DISCORD_TOKEN")
-
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN environment variable is not set!")
+    raise ValueError("DISCORD_TOKEN not set")
 
-# ------------------- DISCORD SETUP -------------------
+# ---------------- DISCORD ----------------
 intents = discord.Intents.default()
 intents.message_content = True
-intents.dm_messages = True
 client = discord.Client(intents=intents)
 
-# ------------------- LTC PRICE -------------------
+# ---------------- LTC PRICE ----------------
 def get_ltc_price():
     url = "https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd"
-    r = requests.get(url, timeout=10)
-    r.raise_for_status()
-    return float(r.json()["litecoin"]["usd"])
+    return requests.get(url, timeout=10).json()["litecoin"]["usd"]
 
-# ------------------- QR → UPI -------------------
-def extract_upi_from_qr(image_path):
-    img = cv2.imread(image_path)
+# ---------------- QR → UPI ----------------
+def extract_upi_from_qr(path):
+    img = cv2.imread(path)
     if img is None:
         return None
 
     detector = cv2.QRCodeDetector()
     data, _, _ = detector.detectAndDecode(img)
 
-    if not data:
-        return None
-
-    if "upi://" not in data.lower():
+    if not data or "upi://" not in data.lower():
         return None
 
     parsed = urlparse(data)
     params = parse_qs(parsed.query)
     return params.get("pa", [None])[0]
 
-# ------------------- EVENTS -------------------
+async def download_image(url, path):
+    r = requests.get(url, timeout=10)
+    with open(path, "wb") as f:
+        f.write(r.content)
+
+# ---------------- EVENTS ----------------
 @client.event
 async def on_ready():
     print(f"✅ Logged in as {client.user}")
@@ -58,61 +55,58 @@ async def on_message(message):
     if not isinstance(message.channel, discord.DMChannel):
         return
 
-    content = message.content.strip().lower()
+    content = message.content.lower().strip()
 
-    # ================= ,nqr (REPLY MODE) =================
+    # ============ ,nqr (REPLY MODE) ============
     if content == ",nqr" and message.reference:
         ref = message.reference.resolved
+        path = "qr.png"
 
-        if ref and ref.attachments:
-            attachment = ref.attachments[0]
+        # 1️⃣ Attachment
+        if ref.attachments:
+            await ref.attachments[0].save(path)
 
-            if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg")):
-                path = "qr.png"
-                await attachment.save(path)
+        # 2️⃣ Embed (FORWARDED IMAGE FIX)
+        elif ref.embeds and ref.embeds[0].image:
+            await download_image(ref.embeds[0].image.url, path)
 
-                upi = extract_upi_from_qr(path)
-                if upi:
-                    await message.channel.send(upi)
-                else:
-                    await message.channel.send("❌ UPI not found")
-                return
-
-        await message.channel.send("❌ Reply to a QR image")
-        return
-
-    # ================= IMAGE UPLOAD / FORWARD =================
-    if message.attachments:
-        attachment = message.attachments[0]
-
-        if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg")):
-            path = "qr.png"
-            await attachment.save(path)
-
-            upi = extract_upi_from_qr(path)
-            if upi:
-                await message.channel.send(upi)
-            else:
-                await message.channel.send("❌ UPI not found")
+        else:
+            await message.channel.send("❌ Reply to a QR image")
             return
 
-    # ================= USD → LTC =================
-    match = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
-    if match:
-        usd = float(match.group(1))
-        try:
-            price = get_ltc_price()
-            await message.channel.send(f"{usd / price:.6f} LTC")
-        except Exception:
-            await message.channel.send("❌ LTC price error")
+        upi = extract_upi_from_qr(path)
+        await message.channel.send(upi if upi else "❌ UPI not found")
         return
 
-    # ================= HELP =================
+    # ============ DIRECT IMAGE ============
+    if message.attachments:
+        path = "qr.png"
+        await message.attachments[0].save(path)
+        upi = extract_upi_from_qr(path)
+        await message.channel.send(upi if upi else "❌ UPI not found")
+        return
+
+    if message.embeds and message.embeds[0].image:
+        path = "qr.png"
+        await download_image(message.embeds[0].image.url, path)
+        upi = extract_upi_from_qr(path)
+        await message.channel.send(upi if upi else "❌ UPI not found")
+        return
+
+    # ============ USD → LTC ============
+    m = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
+    if m:
+        usd = float(m.group(1))
+        price = get_ltc_price()
+        await message.channel.send(f"{usd / price:.6f} LTC")
+        return
+
+    # ============ HELP ============
     await message.channel.send(
-        "Reply `,nqr` to a QR image → get UPI ID\n"
-        "OR just send QR image\n"
+        "Reply `,nqr` to a QR image\n"
+        "Or just send QR image\n"
         "`10$` → USD to LTC"
     )
 
-# ------------------- RUN -------------------
+# ---------------- RUN ----------------
 client.run(TOKEN)
