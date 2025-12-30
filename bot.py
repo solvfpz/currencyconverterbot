@@ -18,18 +18,21 @@ if not ETHERSCAN_API_KEY:
 
 # ------------------- DISCORD SETUP -------------------
 intents = discord.Intents.default()
-intents.messages = True
+intents.message_content = True
 intents.dm_messages = True
+
 client = discord.Client(intents=intents)
 
-# ------------------- STEP 1: LTC PRICE -------------------
+# ------------------- LTC PRICE -------------------
 def get_ltc_price():
-    url = "https://api.coinbase.com/v2/prices/LTC-USD/spot"
-    r = requests.get(url, timeout=10)
+    r = requests.get(
+        "https://api.coinbase.com/v2/prices/LTC-USD/spot",
+        timeout=10
+    )
     r.raise_for_status()
     return float(r.json()["data"]["amount"])
 
-# ------------------- STEP 2: UPI → QR -------------------
+# ------------------- UPI → QR -------------------
 def generate_upi_qr(upi_id, amount=None, note=None):
     upi_url = f"upi://pay?pa={upi_id}"
     if amount:
@@ -40,7 +43,7 @@ def generate_upi_qr(upi_id, amount=None, note=None):
     img = qrcode.make(upi_url)
     img.save("upi_qr.png")
 
-# ------------------- STEP 3: QR → UPI (OpenCV) -------------------
+# ------------------- QR → UPI (ONLY UPI ID) -------------------
 def extract_upi_from_qr(image_path):
     img = cv2.imread(image_path)
     detector = cv2.QRCodeDetector()
@@ -52,11 +55,9 @@ def extract_upi_from_qr(image_path):
     parsed = urlparse(data)
     params = parse_qs(parsed.query)
 
-    return {
-        "upi_id": params.get("pa", [None])[0],
-    }
+    return params.get("pa", [None])[0]
 
-# ------------------- STEP 4: USDT BALANCES -------------------
+# ------------------- USDT BALANCE -------------------
 chain_urls = {
     "ERC20": "https://api.etherscan.io/api",
     "BEP20": "https://api.bscscan.com/api",
@@ -83,12 +84,8 @@ def get_usdt_balances(address):
 
         try:
             res = requests.get(url, timeout=10).json()
-            if res.get("status") == "1":
-                balances[chain] = int(res["result"]) / 10**6
-            else:
-                balances[chain] = 0.0
-        except Exception as e:
-            print(f"{chain} error:", e)
+            balances[chain] = int(res["result"]) / 1_000_000 if res.get("status") == "1" else 0.0
+        except:
             balances[chain] = 0.0
 
     return balances
@@ -96,7 +93,7 @@ def get_usdt_balances(address):
 # ------------------- EVENTS -------------------
 @client.event
 async def on_ready():
-    print(f"✅ Bot logged in as {client.user}")
+    print(f"✅ Logged in as {client.user}")
 
 @client.event
 async def on_message(message):
@@ -108,26 +105,24 @@ async def on_message(message):
 
     content = message.content.strip()
 
-    # ---------- QR IMAGE → UPI ----------
+    # ---- QR IMAGE → ONLY UPI ID ----
     if message.attachments:
-        attachment = message.attachments[0]
-        if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg")):
-            path = "qr_upload.png"
-            await attachment.save(path)
+        att = message.attachments[0]
+        if att.filename.lower().endswith(("png", "jpg", "jpeg")):
+            path = "qr.png"
+            await att.save(path)
 
-            data = extract_upi_from_qr(path)
-            if not data or not data["upi_id"]:
-                await message.channel.send("❌ No valid UPI QR detected.")
+            upi_id = extract_upi_from_qr(path)
+            if not upi_id:
+                await message.channel.send("❌ No valid UPI found")
                 return
 
-            await message.channel.send(data["upi_id"])
-            
+            await message.channel.send(upi_id)
             return
 
-    # ---------- UPI → QR ----------
+    # ---- UPI → QR ----
     if content.lower().startswith("upi "):
         parts = content.split(maxsplit=3)
-
         upi_id = parts[1]
         amount = None
         note = None
@@ -135,56 +130,33 @@ async def on_message(message):
         if len(parts) >= 3:
             try:
                 amount = float(parts[2])
-            except ValueError:
+            except:
                 note = parts[2]
 
         if len(parts) == 4:
             note = parts[3]
 
         generate_upi_qr(upi_id, amount, note)
-        await message.channel.send(
-            content="📲 Your UPI QR:",
-            file=discord.File("upi_qr.png")
-        )
+        await message.channel.send(file=discord.File("upi_qr.png"))
         return
 
-    # ---------- USD → LTC ----------
-    match = re.fullmatch(r"(\d+(\.\d+)?)(\$)?", content)
-    if match:
-        usd = float(match.group(1))
-        try:
-            price = get_ltc_price()
-            await message.channel.send(
-                f"USD: ${usd:.2f}\n"
-                f"LTC: {usd / price:.6f}\n"
-                f"LTC Price: ${price:.2f}"
-            )
-        except Exception:
-            await message.channel.send("⚠️ Price fetch failed.")
+    # ---- USD → LTC ----
+    if re.fullmatch(r"\d+(\.\d+)?\$?", content):
+        usd = float(content.replace("$", ""))
+        price = get_ltc_price()
+        await message.channel.send(f"{usd / price:.6f} LTC")
         return
 
-    # ---------- USDT BALANCE ----------
+    # ---- USDT BAL ----
     if content.lower().startswith("bal "):
         address = content.split(maxsplit=1)[1]
-        balances = get_usdt_balances(address)
-
+        bal = get_usdt_balances(address)
         await message.channel.send(
-            f"USDT Address: {address}\n"
-            f"USDT ERC20 : {balances['ERC20']:.2f} USD\n"
-            f"USDT BEP20 : {balances['BEP20']:.2f} USD\n"
-            f"USDT POLY  : {balances['POLY']:.2f} USD"
+            f"ERC20: {bal['ERC20']}\n"
+            f"BEP20: {bal['BEP20']}\n"
+            f"POLY: {bal['POLY']}"
         )
         return
-
-    # ---------- HELP ----------
-    await message.channel.send(
-        "❌ Invalid command\n\n"
-        "`10$` → USD to LTC\n"
-        "`upi upi@id 500 note`\n"
-        "`bal wallet_address`\n"
-        "Or send a **UPI QR image**"
-    )
 
 # ------------------- RUN -------------------
 client.run(TOKEN)
-
