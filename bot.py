@@ -54,6 +54,8 @@ def extract_upi_from_qr(image_path):
 
     return {
         "upi_id": params.get("pa", [None])[0],
+        "name": params.get("pn", [None])[0],
+        "amount": params.get("am", [None])[0]
     }
 
 # ------------------- STEP 4: USDT BALANCES -------------------
@@ -120,10 +122,8 @@ async def on_message(message):
                 await message.channel.send("❌ No valid UPI QR detected.")
                 return
 
-            await message.channel.send(
-                "📌 **UPI QR Details**\n"
-                f": `{data['upi_id']}`\n"
-            )
+            await message.channel.send(data["upi_id"])
+            
             return
 
     # ---------- UPI → QR ----------
@@ -189,4 +189,3 @@ async def on_message(message):
 
 # ------------------- RUN -------------------
 client.run(TOKEN)
-
