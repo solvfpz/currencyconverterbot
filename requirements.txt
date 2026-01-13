@@ -1,7 +1,5 @@
 discord.py==2.3.2
 requests==2.31.0
 opencv-python-headless==4.8.1.78
-Pillow==10.0.1
-bitcoinlib==0.6.13
-bip39==0.1.2
+Pillow==10.4.0
 numpy==1.24.3
