@@ -11,7 +11,6 @@ WALLEX_API = "https://api.wallex.ir/api/v1/market/udf/history"
 QR_API = "https://api.qrserver.com/v1/create-qr-code/"
 
 bot = commands.Bot(command_prefix=',', intents=discord.Intents.all())
-
 @bot.event
 async def on_ready():
     print(f'{bot.user} LIVE! 💎')
@@ -52,3 +51,4 @@ async def create_wallet(ctx):
     await ctx.send(embed=embed, content="⚠️ **DM ONLY** - Never share privkey!")
 
 bot.run(os.getenv('DISCORD_TOKEN'))
+
