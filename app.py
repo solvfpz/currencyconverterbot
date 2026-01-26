@@ -5,182 +5,182 @@ import os
 import re
 import asyncio
 
-# Intents for message content
+# ─────────────────────────────
+# BOT INTENTS
+# ─────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
 
-# Bot setup
-bot = commands.Bot(command_prefix=',', intents=intents, help_command=None)
+bot = commands.Bot(
+    command_prefix=',',
+    intents=intents,
+    help_command=None
+)
 
-# API URLs
+# ─────────────────────────────
+# API ENDPOINTS
+# ─────────────────────────────
 BLOCKCYPHER_LTC = "https://api.blockcypher.com/v1/ltc/main"
-
-# Event: Bot ready
-@bot.event
-async def on_ready():
-    print(f'✅ {bot.user} is online!')
-    print(f'📊 Bot is ready to check LTC balances and calculate math!')
-    print(f'🔗 Connected to {len(bot.guilds)} server(s)')
-
-# CoinGecko API for LTC price
 COINGECKO_LTC = "https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd"
 
-# Helper: Get LTC price
+# ─────────────────────────────
+# BOT READY
+# ─────────────────────────────
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} is online")
+    print(f"🔗 Connected to {len(bot.guilds)} server(s)")
+
+# ─────────────────────────────
+# HELPERS
+# ─────────────────────────────
 async def get_ltc_price():
     try:
         loop = asyncio.get_event_loop()
-        resp = await loop.run_in_executor(None, lambda: requests.get(COINGECKO_LTC, timeout=10))
+        resp = await loop.run_in_executor(
+            None, lambda: requests.get(COINGECKO_LTC, timeout=10)
+        )
         resp.raise_for_status()
-        return resp.json()['litecoin']['usd']
+        return resp.json()["litecoin"]["usd"]
     except:
-        return 70.0  # Fallback price
+        return 70.0  # fallback price
 
-# Helper: Get LTC balance using BlockCypher
-async def get_ltc_balance(address):
-    try:
-        url = f"{BLOCKCYPHER_LTC}/addrs/{address}/balance"
-        print(f"📡 Fetching balance from: {url}")
-        
-        loop = asyncio.get_event_loop()
-        resp = await loop.run_in_executor(None, lambda: requests.get(url, timeout=15))
-        resp.raise_for_status()
-        data = resp.json()
-        
-        print(f"✅ Response received: {data}")
-        
-        # Convert satoshis to LTC
-        balance_ltc = data.get('balance', 0) / 100000000
-        final_balance_ltc = data.get('final_balance', 0) / 100000000
-        unconfirmed_ltc = data.get('unconfirmed_balance', 0) / 100000000
-        
-        return {
-            'balance': balance_ltc,
-            'final_balance': final_balance_ltc,
-            'unconfirmed': unconfirmed_ltc,
-            'n_tx': data.get('n_tx', 0)
-        }
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Request error: {e}")
-        return None
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        return None
 
-# Helper: Safe math evaluator
+async def get_ltc_balance(address, retries=3):
+    url = f"{BLOCKCYPHER_LTC}/addrs/{address}/balance"
+
+    for attempt in range(retries):
+        try:
+            loop = asyncio.get_event_loop()
+            resp = await loop.run_in_executor(
+                None, lambda: requests.get(url, timeout=10)
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            return {
+                "final_balance": data.get("final_balance", 0) / 100000000,
+                "balance": data.get("balance", 0) / 100000000,
+                "unconfirmed": data.get("unconfirmed_balance", 0) / 100000000,
+                "n_tx": data.get("n_tx", 0)
+            }
+
+        except Exception as e:
+            print(f"⚠️ Balance fetch error ({attempt+1}): {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(2)
+
+    return None
+
+
 def safe_eval_math(expression):
     try:
-        expression = expression.replace(' ', '')
-        
-        # Only allow numbers, operators, parentheses, decimal points
-        if not re.match(r'^[\d+\-*/().]+$', expression):
+        expression = expression.replace(" ", "")
+
+        if not re.fullmatch(r'[\d+\-*/().]+', expression):
             return None
-        
-        # Check if it has at least one operator
-        if not any(op in expression for op in ['+', '-', '*', '/']):
+
+        if not re.search(r'[\+\-\*/]', expression):
             return None
-        
-        # Evaluate safely
+
         result = eval(expression, {"__builtins__": {}}, {})
         return result
     except:
         return None
 
-# Event: Handle messages for auto-calculator
+# ─────────────────────────────
+# MESSAGE HANDLER (AUTO CALC)
+# ─────────────────────────────
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    content = message.content.strip()
-    
-    # Auto math calculator
-    math_pattern = r'^[\d+\-*/().\s]+$'
-    if re.match(math_pattern, content) and any(op in content for op in ['+', '-', '*', '/']):
-        result = safe_eval_math(content)
-        if result is not None:
-            # Format result
-            if isinstance(result, float):
-                if result.is_integer():
-                    result = int(result)
-                else:
-                    result = round(result, 8)
-            
-            await message.reply(f"{result}", mention_author=False)
-            return
-    
-    # Process commands
-    await bot.process_commands(message)
+    # If command, don't calculate
+    if message.content.startswith(','):
+        await bot.process_commands(message)
+        return
 
-# Command: ,bal <ltc_address>
-@bot.command(name='bal')
+    content = message.content.strip()
+
+    # Auto calculator
+    if re.search(r'[\+\-\*/]', content) and re.fullmatch(r'[\d+\-*/().\s]+', content):
+        result = safe_eval_math(content)
+
+        if result is not None:
+            if isinstance(result, float):
+                result = int(result) if result.is_integer() else round(result, 8)
+
+            await message.reply(str(result), mention_author=False)
+            return
+
+# ─────────────────────────────
+# COMMAND: ,bal
+# ─────────────────────────────
+@bot.command(name="bal")
 async def balance(ctx, address: str = None):
     if not address:
-        await ctx.send("❌ Please provide an LTC address!\nUsage: `,bal <ltc_address>`")
+        await ctx.send("❌ Usage: `,bal <ltc_address>`")
         return
-    
-    # Validate LTC address
-    if not (address.startswith('L') or address.startswith('M') or address.startswith('ltc1') or address.startswith('3')):
-        await ctx.send("❌ Invalid LTC address format!")
+
+    if not (
+        address.startswith("L") or
+        address.startswith("M") or
+        address.startswith("ltc1") or
+        address.startswith("3")
+    ):
+        await ctx.send("❌ Invalid LTC address format")
         return
-    
-    # Send loading message
-    loading_msg = await ctx.send(f"🔍 Checking balance for `{address}`...")
-    
-    # Fetch balance and price
+
+    loading = await ctx.send(f"🔍 Checking balance for `{address}`...")
+
     balance_data = await get_ltc_balance(address)
-    
     if balance_data is None:
-        await loading_msg.edit(content="❌ Failed to fetch balance. Please check the address or try again later.")
+        await loading.edit(content="❌ Failed to fetch balance. Try again later.")
         return
-    
-    # Get LTC price
+
     ltc_price = await get_ltc_price()
-    usd_balance = balance_data['final_balance'] * ltc_price
-    
-    # Format response with line breaks
-    response = (
+    usd_value = balance_data["final_balance"] * ltc_price
+
+    reply = (
         f"Your LTC address is: {address}\n"
         f"Your LTC balance is: {balance_data['final_balance']:.4f} LTC\n"
-        f"Your USD balance is: ${usd_balance:.2f} USD"
+        f"Your USD balance is: ${usd_value:.2f} USD"
     )
-    
-    await loading_msg.edit(content=response)
 
-# Command: ,help
+    await loading.edit(content=reply)
+
+# ─────────────────────────────
+# COMMAND: ,help
+# ─────────────────────────────
 @bot.command()
 async def help(ctx):
-    help_text = """```
-🤖 LTC Balance & Calculator Bot
+    await ctx.send(
+        "```\n"
+        "🤖 LTC Balance & Calculator Bot\n\n"
+        "Commands:\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        ",bal <address>  - Check LTC balance\n"
+        ",help           - Show this help\n\n"
+        "Auto Calculator:\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Just type math expressions\n\n"
+        "Examples:\n"
+        "10*11\n"
+        "100/5\n"
+        "(50+10)*2\n"
+        "```"
+    )
 
-Commands:
-━━━━━━━━━━━━━━━━━━━━━━
-,bal <address>  - Check LTC balance
-,help           - Show this help message
-
-📊 Auto Calculator:
-━━━━━━━━━━━━━━━━━━━━━━
-Just type any math expression!
-
-Examples:
-  10*11
-  5+5/2
-  (100-50)*2
-  15.5*3+10
-```"""
-    await ctx.send(help_text)
-
-# Run the bot
+# ─────────────────────────────
+# RUN BOT
+# ─────────────────────────────
 if __name__ == "__main__":
     token = os.getenv("DISCORD_TOKEN")
+
     if not token:
-        print("❌ DISCORD_TOKEN not found!")
+        print("❌ DISCORD_TOKEN not found")
         exit(1)
-    
-    print("🚀 Starting Discord bot...")
-    print("📌 Python version: 3.12.0")
-    print("🔧 Environment: Render")
-    
-    try:
-        bot.run(token)
-    except Exception as e:
-        print(f"❌ Bot failed to start: {e}")
+
+    print("🚀 Starting bot...")
+    bot.run(token)
