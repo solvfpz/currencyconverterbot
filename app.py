@@ -22,6 +22,19 @@ async def on_ready():
     print(f'📊 Bot is ready to check LTC balances and calculate math!')
     print(f'🔗 Connected to {len(bot.guilds)} server(s)')
 
+# CoinGecko API for LTC price
+COINGECKO_LTC = "https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd"
+
+# Helper: Get LTC price
+async def get_ltc_price():
+    try:
+        loop = asyncio.get_event_loop()
+        resp = await loop.run_in_executor(None, lambda: requests.get(COINGECKO_LTC, timeout=10))
+        resp.raise_for_status()
+        return resp.json()['litecoin']['usd']
+    except:
+        return 70.0  # Fallback price
+
 # Helper: Get LTC balance using BlockCypher
 async def get_ltc_balance(address):
     try:
@@ -92,7 +105,7 @@ async def on_message(message):
                 else:
                     result = round(result, 8)
             
-            await message.reply(f"`{content} = {result}`", mention_author=False)
+            await message.reply(f"{result}", mention_author=False)
             return
     
     # Process commands
@@ -113,22 +126,21 @@ async def balance(ctx, address: str = None):
     # Send loading message
     loading_msg = await ctx.send(f"🔍 Checking balance for `{address}`...")
     
-    # Fetch balance
+    # Fetch balance and price
     balance_data = await get_ltc_balance(address)
     
     if balance_data is None:
         await loading_msg.edit(content="❌ Failed to fetch balance. Please check the address or try again later.")
         return
     
-    # Format response
-    response = f"""```
-📍 Address: {address}
-💰 Balance: {balance_data['final_balance']:.8f} LTC
-📊 Total Transactions: {balance_data['n_tx']}
-```"""
+    # Get LTC price
+    ltc_price = await get_ltc_price()
+    usd_balance = balance_data['final_balance'] * ltc_price
     
-    if balance_data['unconfirmed'] > 0:
-        response = response.rstrip('```') + f"\n⏳ Unconfirmed: {balance_data['unconfirmed']:.8f} LTC\n```"
+    # Format response
+    response = f"""Your LTC address is: {address}
+Your LTC balance is: {balance_data['final_balance']:.4f} LTC
+Your USD balance is: ${usd_balance:.2f} USD"""
     
     await loading_msg.edit(content=response)
 
