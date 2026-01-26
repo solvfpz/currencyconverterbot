@@ -137,10 +137,12 @@ async def balance(ctx, address: str = None):
     ltc_price = await get_ltc_price()
     usd_balance = balance_data['final_balance'] * ltc_price
     
-    # Format response
-    response = f"""Your LTC address is: {address}
-Your LTC balance is: {balance_data['final_balance']:.4f} LTC
-Your USD balance is: ${usd_balance:.2f} USD"""
+    # Format response with line breaks
+    response = (
+        f"Your LTC address is: {address}\n"
+        f"Your LTC balance is: {balance_data['final_balance']:.4f} LTC\n"
+        f"Your USD balance is: ${usd_balance:.2f} USD"
+    )
     
     await loading_msg.edit(content=response)
 
