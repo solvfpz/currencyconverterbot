@@ -168,7 +168,7 @@ async def balance(ctx, address: str = None):
     
     await loading_msg.edit(content=response)
 
-# Command: ,help
+# Main Command: ,help
 @bot.command()
 async def help(ctx):
     help_text = """```
