@@ -76,7 +76,7 @@ async def get_ltc_balance(address):
         
         print(f"✅ Blockchair success")
         
-        # Blockchair returns balance directly in LTC
+        # Blockchair returns balance directly in LTC (address/balance)
         balance = data['data'][address]['address']['balance'] / 100000000
         
         return {
@@ -191,7 +191,7 @@ Examples:
 ```"""
     await ctx.send(help_text)
 
-# Run the bot
+# Run the bot 
 if __name__ == "__main__":
     token = os.getenv("DISCORD_TOKEN")
     if not token:
