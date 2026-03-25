@@ -148,7 +148,7 @@ async def balance(ctx, address: str = None):
     # Send loading message
     loading_msg = await ctx.send(f"🔍 Checking balance for `{address}`...")
     
-    # Fetch balance and price
+    # Fetch balance and price of address
     balance_data = await get_ltc_balance(address)
     
     if balance_data is None:
